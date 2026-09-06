@@ -359,7 +359,7 @@ class SondeHubOutput:
         # DFM: Accept either D[0-9]{8} (with prefix) or [0-9]{8} (JSON format without prefix)
         # Examples: "D21062636" or "21062636"
         elif sonde_type_upper == 'DFM':
-            return bool(re.match(r'^(D)?[0-9]{8}$', serial))
+            return bool(re.match(r'^(D)?[0-9]{6,8}$', serial))
         
         # M10/M20: M[0-9A-Z]{8,10}
         elif sonde_type_upper in ('M10', 'M20'):

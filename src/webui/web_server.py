@@ -45,7 +45,6 @@
 """
 
 import os
-import sys
 import socket
 import subprocess
 import shutil
@@ -966,9 +965,9 @@ class WebUI:
                 
                 self.logger.info(f"Manual decoder request: {frequency/1e6:.3f} MHz, type={sonde_type}, device={device_serial or 'auto'}, duration={duration_minutes}m")
                 
-                if frequency < 400e6 or frequency > 406e6:
-                    self.logger.warning(f"Frequency {frequency/1e6:.3f} MHz out of range")
-                    return jsonify({'success': False, 'error': 'Frequency out of range (400-406 MHz)'})
+                #if frequency < 400e6 or frequency > 406e6:
+                #    self.logger.warning(f"Frequency {frequency/1e6:.3f} MHz out of range")
+                #    return jsonify({'success': False, 'error': 'Frequency out of range (400-406 MHz)'})
                 
                 if duration_minutes < 0 or duration_minutes > 1440:
                     self.logger.warning(f"Invalid duration: {duration_minutes} minutes")

@@ -32,15 +32,8 @@
 #  RSSI reported as estimated dBm using a gain-compensated dBFS mapping:
 #    rssi_dbm ≈ rssi_dbfs − gain_db + calibration_db
 #
-#  SNR is estimated SPECTRALLY (in-band vs out-of-band) from an FFT of each
-#  IQ chunk: the sonde is a narrowband signal centred in the wide (48 kHz)
-#  rtl_fm channel, so it fills only a fraction of the FFT bins and the rest are
-#  noise. The noise floor is the low percentile of the PSD bins (separation in
-#  FREQUENCY), and SNR = in-band signal power over in-band noise power. The old
-#  method took the noise floor from the rolling TOTAL-power history (separation
-#  in TIME); for a continuously-transmitting sonde every history sample already
-#  contained the signal, so the "floor" tracked the signal and SNR collapsed to
-#  ~0 dB, twitching only when RSSI spiked (hence SNR mirrored RSSI).
+#  SNR is derived from the difference between instantaneous signal power
+#  and the 20th-percentile noise floor of the rolling window.
 #
 #  Used by : AudioPipeline, AirspyPipeline, AirspyChannelizer
 #
@@ -96,44 +89,22 @@ class SignalMetrics:
         i = i_samples.astype(np.float32, copy=False)
         q = q_samples.astype(np.float32, copy=False)
 
-        # RSSI: mean instantaneous IQ power in linear scale → dBFS → dBm.
+        # Mean instantaneous IQ power in linear scale.
         p = np.mean(i * i + q * q)
         p = max(float(p), 1e-12)
-        rssi_dbfs = 10.0 * math.log10(p)
-
-        # SNR: spectral in-band vs out-of-band. FFT the chunk; the sonde occupies
-        # the central bins while the majority of bins are noise. The noise floor
-        # is a low percentile of the PSD (dominated by the noise bins), signal is
-        # the bins that rise clearly above it, and SNR compares in-band signal
-        # power to in-band noise power. Separating in FREQUENCY (not TIME) is what
-        # makes this correct for a continuously-present signal. See module header.
-        snr_db = self.latest_snr_db  # keep last value if a chunk is too short
-        try:
-            n = int(i.shape[0])
-            if n >= 64:
-                if n > 4096:                       # cap FFT cost (throttled ~10 Hz)
-                    n = 4096
-                c = (i[:n] + 1j * q[:n]).astype(np.complex64)
-                win = np.hanning(n).astype(np.float32)
-                spec = np.fft.fft(c * win)
-                psd = spec.real * spec.real + spec.imag * spec.imag
-                noise_bin = max(float(np.percentile(psd, 20.0)), 1e-12)
-                sig_mask = psd > noise_bin * 4.0   # bins ≥ ~6 dB above the floor
-                n_sig = int(np.count_nonzero(sig_mask))
-                if n_sig > 0:
-                    sig_excess = float(np.sum(psd[sig_mask] - noise_bin))
-                    snr_db = 10.0 * math.log10(max(sig_excess, 1e-12) / (noise_bin * n_sig))
-                    snr_db = max(0.0, snr_db)
-                else:
-                    snr_db = 0.0
-        except Exception:
-            pass
 
         with self._lock:
             self.power_hist.append(p)
-            self.latest_rssi_dbfs = rssi_dbfs
-            self.latest_rssi_dbm = rssi_dbfs - float(self.gain_db) + float(self.calibration_db)
-            self.latest_snr_db = snr_db
+            self.latest_rssi_dbfs = 10.0 * math.log10(p)
+            self.latest_rssi_dbm = self.latest_rssi_dbfs - float(self.gain_db) + float(self.calibration_db)
+
+            if len(self.power_hist) >= 10:
+                noise_p = float(np.percentile(np.array(self.power_hist, dtype=np.float32), 20.0))
+            else:
+                noise_p = p
+            noise_p = max(noise_p, 1e-12)
+            noise_db = 10.0 * math.log10(noise_p)
+            self.latest_snr_db = max(0.0, self.latest_rssi_dbfs - noise_db)
 
     def snapshot(self) -> Tuple[Optional[float], Optional[float]]:
         with self._lock:

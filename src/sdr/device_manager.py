@@ -1627,7 +1627,8 @@ class DeviceWorker:
         # dft_detect ever returned a usable offset at all), so for those
         # types keep the type ID but ignore the offset and fall back to
         # plain 1 kHz quantization of the raw scan-detected frequency.
-        FREQUENCY_OFFSET_SENSITIVE_TYPES = ('M10', 'M20')
+        #vg1320
+        FREQUENCY_OFFSET_SENSITIVE_TYPES = ('M10', 'M20', 'RS92','IMET4','DFM9','DFM','RS41')
         if sonde_offset != 0.0 and sonde_type not in FREQUENCY_OFFSET_SENSITIVE_TYPES:
             self.logger.debug(
                 f"Ignoring DFT offset {sonde_offset:+.1f} Hz for {sonde_type} "
@@ -1638,7 +1639,7 @@ class DeviceWorker:
         # Apply frequency correction from DFT detection (critical for M10/M20)
         # Quantize to 1 kHz to avoid rtl_fm frequency jitter
         if sonde_offset != 0.0:
-            corrected_freq = round((sig.frequency + sonde_offset) / 1000.0) * 1000.0
+            corrected_freq = round((sig.frequency + sonde_offset) / 500.0) * 500.0
             self.logger.info(
                 f"Applying DFT frequency correction: {sig.frequency/1e6:.4f} MHz "
                 f"+ {sonde_offset:+.1f} Hz → {corrected_freq/1e6:.4f} MHz"
@@ -1693,12 +1694,12 @@ class DeviceWorker:
         # now the default; set decoders.soft_decode: true to opt back into the
         # ~2 dB soft-decision chain once it's verified on your hardware. (The
         # KA9Q receiver has its own, separate, working soft chain — unaffected.)
-        soft_decode = bool(self.app_config.get('decoders', {}).get('soft_decode', False))
+        soft_decode = bool(self.app_config.get('decoders', {}).get('soft_decode', True))
         # Optional auto_rx-style inline DC removal via iq_dec on the --IQ chain.
         # Default OFF: harmless where the iq_dec binary is absent (graceful
         # no-op), but keep it opt-in so a new stage never silently changes
         # decode behaviour across gateways until validated per client.
-        iq_dc_block = bool(self.app_config.get('decoders', {}).get('iq_dc_block', False))
+        iq_dc_block = bool(self.app_config.get('decoders', {}).get('iq_dc_block', True))
         decoder = RS1729Decoder(
             frequency=sig.frequency,
             sonde_type=sonde_type,
@@ -1897,8 +1898,9 @@ class DeviceWorker:
         if (ended_source == 'auto' and frames_decoded == 0 and ended_freq
                 and self._manager is not None):
             try:
-                self._manager.note_auto_decode_failed(
-                    ended_freq, snr=self._cur_signal_strength_db)
+                #self._manager.note_auto_decode_failed(
+                #    ended_freq, snr=self._cur_signal_strength_db)
+                self.logger.info(f"Auto-decode produced 0 frames at {ended_freq/1e6:.4f} MHz — ")
                 # If this 0-frame decode came from the RS41 BW fast-path, the type
                 # ID was probably wrong (a narrow-measuring DFM etc.) — force
                 # dft_detect on the next detection so it's classified correctly.
@@ -2009,7 +2011,8 @@ class DeviceWorker:
                 self.logger.warning(f"DFT detection error: {exc}")
         
         # Bandwidth fallback returns no offset
-        return self._bandwidth_fallback(sig), 0.0
+        #return self._bandwidth_fallback(sig), 0.0
+        return None, 0.0
 
     def _bandwidth_fallback(self, sig: DetectedSignal) -> str:
         """Classify sonde type by bandwidth with confidence-aware ambiguous zone handling."""
@@ -2230,6 +2233,13 @@ class DeviceWorker:
                 snr_db = live_snr
             elif snr_db is None:
                 snr_db = self._cur_signal_strength_db
+            
+            if self._decoder:
+                frame_stats = self._decoder.get_frame_stats()
+                if 'ebno_db' in frame_stats:
+                    ebno_db = frame_stats.get('ebno_db')
+                    if ebno_db is not None:
+                        snr_db = ebno_db
 
             # Frame number from parsed frame_data or fallback to raw line "[  361] …"
             frame_number = frame_data.get('frame_number', 0)

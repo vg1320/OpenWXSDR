@@ -77,7 +77,7 @@ class FrequencyRepository:
 
     @staticmethod
     def _key(freq_hz: float) -> int:
-        return round(freq_hz / 10_000.0)   # 10 kHz channel bucket
+        return round(freq_hz / 5_000.0)   # 10 kHz channel bucket
 
     def _row(self, event, freq_hz, sonde_type="", serial="", snr=None, rssi=None, alt=None, device=""):
         def num(v, spec):

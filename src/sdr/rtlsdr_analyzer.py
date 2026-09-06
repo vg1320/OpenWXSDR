@@ -414,6 +414,9 @@ class SpectrumAnalyzer:
             width=5  # Minimum width
         )
 
+        if len(peaks) > 0 :
+            self.logger.info(f"{len(peaks):d} peaks detected")
+
         detected = []
         for peak_idx in peaks:
             freq = freqs[peak_idx]
@@ -449,7 +452,7 @@ class SpectrumAnalyzer:
                 continue
 
             # Filter by radiosonde typical bandwidth (4-20 kHz)
-            if not (2000 < bandwidth < 30000):
+            if not (1000 < bandwidth < 30000):
                 self.logger.debug(
                     f"Rejected signal (bandwidth): {freq/1e6:.4f} MHz, BW: {bandwidth/1e3:.1f} kHz"
                 )

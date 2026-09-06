@@ -14,6 +14,7 @@ station:
   lat: 0.000                   # Station latitude (decimal degrees, N positive)
   lon: 0.000                   # Station longitude (decimal degrees, E positive)
   alt: 0                       # Station altitude (metres ASL)
+  aprs_passcode: -1            # APRS passcode (generate at https://apps.magicbug.co.uk/passcode/)
   upload_position: true       # Upload your listener position to networks
   gateway_symbol: '/r'        # APRS symbol (table/symbol, e.g. '/r' = receiver, 'R0' = gateway)
   # Gateway status information (for MQTT gateway status messages)
@@ -292,7 +293,19 @@ detection:
   dft_detect_path: 'dft_detect'  # Path to dft_detect binary (or just 'dft_detect' if in PATH)
   # Capture duration is set via detection.detect_confirm_time above (falls back
   # to the older dft_sample_duration key here if detect_confirm_time is absent).
-  # Per-station correlation thresholds (override the auto_rx-calibrated defaults):
+
+  # Per-type correlation thresholds for dft_detect (OPTIONAL).
+  # Defaults come from radiosonde_auto_rx's calibration study and are applied
+  # automatically — uncomment only to calibrate THIS station. A score must
+  # exceed its type's threshold (by magnitude; M10/M20 correlate negatively)
+  # before that type is accepted, otherwise bandwidth fallback is used.
+  #
+  # To calibrate: run dft_detect over a noise-only capture from this receiver
+  # to find each type's noise-floor correlation, then set the threshold roughly
+  # 0.1-0.15 above it. Too low = wrong-type decoders start on noise; too high =
+  # weak sondes get missed and silently fall back to the bandwidth guess.
+  # The "No sonde type exceeded its correlation threshold (...)" log line prints
+  # each type's actual score vs. its threshold, which is what to calibrate from.
   # dft_thresholds:
   #   RS41: 0.53
   #   RS92: 0.54

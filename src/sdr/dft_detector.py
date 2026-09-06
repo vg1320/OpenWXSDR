@@ -439,17 +439,18 @@ class DftDetector:
             '--dc',
         ]
 
-    def _build_dft_cmd_modern(self, sample_rate: int) -> list:
+    def _build_dft_cmd_modern(self, iq_file: str, sample_rate: int) -> list:
         """Newer ("Vigor's fork") build: dft_detect --dc --iq 0.0 - <rate> 16,
         reading samples from stdin (the '-' placeholder) instead of a filename."""
         return [
             self.dft_detect_path,
             '--dc',
-            '--iq',
-            '0.0',
             '-',
             str(sample_rate),
             '16',
+            '--IQ',
+            '0.0',
+            iq_file
         ]
 
     def _build_dft_cmd_advanced(self, iq_file: str, sample_rate: int) -> list:
@@ -476,8 +477,8 @@ class DftDetector:
         expects — a clean returncode alone doesn't guarantee that, and a
         206/non-zero exit code alone doesn't rule it out."""
         if fmt == 'modern':
-            cmd = self._build_dft_cmd_modern(sample_rate)
-            stdin_file = open(iq_file, 'rb')
+            cmd = self._build_dft_cmd_modern(iq_file, sample_rate)
+            stdin_file = None
         elif fmt == 'advanced':
             cmd = self._build_dft_cmd_advanced(iq_file, sample_rate)
             stdin_file = None
@@ -602,7 +603,7 @@ class DftDetector:
         # RS41/RS92 sub-labels some builds emit (e.g. "RS41SG") are accepted
         # too; \w* absorbs any build-specific suffix before the colon.
         line_pattern = re.compile(
-            r'^\s*(RS41|RS92|DFM9?|M10|M20|IMET4|IMET5|IMET1|iMet|LMS6|MRZ)\w*\s*:\s*'
+            r'^\s*(RS41|RS92|DFM9?|M10|M20|IMET|IMET4|IMET5|IMET1|iMet|LMS6|MRZ)\w*\s*:\s*'
             r'([+-]?\d+(?:\.\d+)?)'
             r'(?:\s*[,;]\s*([+-]?\d+(?:\.\d+)?)(?:\s*Hz)?)?\s*$',
             re.IGNORECASE,

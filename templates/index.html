@@ -954,7 +954,7 @@ See http://www.gnu.org/licenses/gpl-2.0.html.
                 const t = s.last_seen ? s.last_seen.slice(11, 19) + 'Z' : '';
                 // distance_km is the height-aware 3D slant range from the gateway.
                 const dist = (s.distance_km != null) ? s.distance_km.toFixed(1) + ' km' : '';
-                const elev = (s.elevation_deg != null) ? 'el ' + s.elevation_deg.toFixed(1) + '°' : '';
+                const elev = (s.elevation_deg != null) ? 'el ' + s.elevation_deg.toFixed(2) + '°' : '';
                 const course = (s.azimuth_deg != null)
                     ? Math.round(s.azimuth_deg) + '° ' + cardinal(s.azimuth_deg) : '';
                 const alt = (s.alt != null) ? Math.round(s.alt) + ' m' : '';
@@ -1698,13 +1698,13 @@ See http://www.gnu.org/licenses/gpl-2.0.html.
                 }
 
                 // M10 / M20 / any DFM report battery voltage — show it on the
-                // tile's last metric slot instead of SNR (dB).
+                // tile's last metric slot instead of RSSI (dBm).
                 const isBattType = /^(DFM|M10|M20)/i.test(typeLabel) || /^(DFM|M10|M20)/i.test(sonde.type || '');
                 const lastMetric = isBattType
                     ? `<i class="bi bi-battery-half"></i>
                             <span class="data-value">${sonde.battery !== undefined && sonde.battery !== null ? sonde.battery.toFixed(2) + ' V' : 'N/A'}</span>`
                     : `<i class="bi bi-graph-up-arrow"></i>
-                            <span class="data-value">${sonde.snr !== undefined && sonde.snr !== null ? sonde.snr.toFixed(1) + ' dB' : 'N/A'}</span>`;
+                            <span class="data-value">${sonde.rssi !== undefined && sonde.rssi !== null ? sonde.rssi.toFixed(1) + ' dBm' : 'N/A'}</span>`;
 
                 // Second-row content depends on the display mode. Standard = alt,
                 // ground speed, SNR/battery. Extended = distance, elevation,
@@ -1729,7 +1729,7 @@ See http://www.gnu.org/licenses/gpl-2.0.html.
                             </div>
                             <div class="data-item">
                                 <i class="bi bi-triangle"></i>
-                                <span class="data-value">${look && look.elevDeg != null ? look.elevDeg.toFixed(1) + '°' : 'N/A'}</span>
+                                <span class="data-value">${look && look.elevDeg != null ? look.elevDeg.toFixed(2) + '°' : 'N/A'}</span>
                             </div>
                             <div class="data-item">
                                 <i class="bi bi-battery-half"></i>
@@ -1807,7 +1807,7 @@ See http://www.gnu.org/licenses/gpl-2.0.html.
                             </div>
                             <div class="data-item">
                                 <i class="bi bi-reception-4"></i>
-                                <span class="data-value">${sonde.rssi !== undefined && sonde.rssi !== null ? sonde.rssi.toFixed(1) + ' dBm' : 'N/A'}</span>
+                                <span class="data-value">${sonde.snr !== undefined && sonde.snr !== null ? sonde.snr.toFixed(1) + ' dB' : 'N/A'}</span>
                             </div>
                             ${row2}
                         </div>
@@ -2390,8 +2390,8 @@ See http://www.gnu.org/licenses/gpl-2.0.html.
                 if (serial.match(/^[A-Z]\d{7}/)) type = 'RS41';
                 else if (serial.match(/^[A-Z]\d{6}/)) type = 'RS92';
                 else if (serial.match(/^\d{8}$/)) type = 'DFM';  // 8 digits = DFM (no prefix)
-                else if (serial.match(/^\d+-\d+-\d+/)) type = 'M20';  // Hyphenated numeric = M20/M10
-                else if (serial.match(/^M\d+/)) type = 'M10';  // M-number fallback
+                else if (serial.match(/^\d+-\d+-\d+/)) type = 'Mxx';  // Hyphenated numeric = M20/M10
+                //else if (serial.match(/^M\d+/)) type = 'M10';  // M-number fallback
                 else if (serial.match(/^iMet/i)) type = 'iMet';
                 else if (serial.match(/^W\d+/)) type = 'iMet';
                 else if (serial.match(/^L\d+/)) type = 'LMS6';
@@ -2931,7 +2931,8 @@ ${trkSegs}
                     serial: sondeSerial,
                     type: 'Historic',
                     lastPosition: { lat: lastPoint.lat, lon: lastPoint.lon },
-                    lastUpdate: lastPoint.time || new Date().toISOString()
+                    lastUpdate: lastPoint.time || new Date().toISOString(),
+                    filename: filename,
                 });
                 updateInactiveSondesList();
             }

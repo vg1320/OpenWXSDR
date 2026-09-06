@@ -133,7 +133,7 @@ class AudioPipeline:
                 '-p', str(self.ppm_correction),
                 '-M', 'raw',
                 '-s', f'{self.sample_rate//1000}k',
-                '-f', f'{self.frequency/1e6:.2f}M',
+                '-f', f'{self.frequency/1e6:.4f}M',
             ]
             # CRITICAL: gain 0 means AUTO (per config docs: "gain: 0 = auto"),
             # but rtl_fm treats '-g 0' as MANUAL 0 dB — near-minimum gain, which

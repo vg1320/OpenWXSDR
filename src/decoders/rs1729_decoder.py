@@ -66,9 +66,9 @@ class RS1729Decoder:
         'RS41': 'rs41mod',
         'RS92': 'rs92mod',
         'DFM': 'dfm09mod',
-        'M10': 'm10mod',
-        'M20': 'm20mod',
-        'iMet': 'imet54mod',
+        'M10': 'm10m20mod',
+        'M20': 'm10m20mod',
+        'IMET': 'imet4iq',
         'LMS6': 'lms6mod',
         'MRZ': 'mrzmod'
     }
@@ -125,6 +125,15 @@ class RS1729Decoder:
         'DFM':  {'sample_rate': 50000, 'baud': 2500,
                  'fsk_extra': ['-i'],
                  'freq_lower': -5000, 'freq_upper': 5000},
+        'M20':  {'sample_rate': 48000, 'baud': 9600,
+                 'fsk_extra': [],
+                 'freq_lower': -10000, 'freq_upper': 10000},
+        'M10':  {'sample_rate': 48000, 'baud': 9600,
+                 'fsk_extra': [],
+                 'freq_lower': -10000, 'freq_upper': 10000},
+        'RS92':  {'sample_rate': 48000, 'baud': 4800,
+                 'fsk_extra': [],
+                 'freq_lower': -20000, 'freq_upper': 20000},
     }
 
     # Class-level cache for decoder capabilities
@@ -290,7 +299,7 @@ class RS1729Decoder:
     
     def __init__(self, frequency: float, sonde_type: str = 'RS41', decoder_path: str = None,
                  sample_rate: int = 48000, soft_decode: bool = False,
-                 allow_rate_change: bool = False, iq_dc_block: bool = False):
+                 allow_rate_change: bool = False, iq_dc_block: bool = True):
         """
         Initialize decoder
 
@@ -346,7 +355,7 @@ class RS1729Decoder:
         if caps_str:
             self.logger.info(f"Detected decoder capabilities: {caps_str}")
         
-        if not self.has_softin and self.sonde_type in ['RS41', 'DFM']:
+        if not self.has_softin and self.sonde_type in ['RS41', 'DFM', 'M10', 'M20', 'RS92']:
             # INFO, not WARNING: the --IQ chain is a fully-supported path and,
             # since --sat was removed from the RS41 command, it emits complete
             # PTU (temp/pressure, and humidity once the sonde's cal subframes
@@ -494,7 +503,12 @@ class RS1729Decoder:
             '-b', str(params['freq_lower']),   # tone search lower bound (Hz)
             '-u', str(params['freq_upper']),   # tone search upper bound (Hz)
             '-s',                              # soft-decision output
-        ] + params['fsk_extra'] + [
+        ] + params['fsk_extra']
+        if self.sonde_type == 'M10':
+            fsk_cmd = fsk_cmd + ['-p 5']
+        if self.sonde_type == 'M20':
+            fsk_cmd = fsk_cmd + ['-p 5']
+        fsk_cmd = fsk_cmd + [
             '--stats=5',                       # JSON stats (EbNodB) every 5 s on stderr
             '2',                               # 2FSK
             str(self.sample_rate),
@@ -523,7 +537,7 @@ class RS1729Decoder:
                     cmd.append(flag)
         elif self.sonde_type == 'DFM':
             # --auto handles DFM06/09/17 subtype + inversion detection.
-            cmd.extend(['--auto', '--softin', '--json'])
+            cmd.extend(['--auto', '--softin', '--json', '-vv', '--dist'])
             # --ecc: keep probe fallback (harmless, and it's in --help anyway).
             if self.decoder_caps.get('ecc', False) or \
                     self._probe_flags_accepted(self.decoder_path, ['--ecc']):
@@ -532,9 +546,38 @@ class RS1729Decoder:
             # reject them (exit 255) and the probe false-positives them, which
             # killed every DFM decode from 2026-07-21 on. See the matching note
             # in _start_iq_chain's DFM branch.
-            for flag, cap_key in (('--dist', 'dist'), ('--ptu', 'ptu'), ('-ID', 'ID')):
+            for flag, cap_key in (('--dist', 'dist'), ('--ptu', 'ptu')):
                 if self.decoder_caps.get(cap_key, False):
                     cmd.append(flag)
+        elif self.sonde_type == 'M10':
+            # Matches the KA9Q path / auto_rx: soft bits are inverted → -i.
+            # JSON output carries PTU directly in this mode (no text fallback
+            # merging needed).
+            cmd.extend(['--softin', '-i', '--json', '--ptu', '-vvv'])
+        elif self.sonde_type == 'M20':
+            # Matches the KA9Q path / auto_rx: soft bits are inverted → -i.
+            # JSON output carries PTU directly in this mode (no text fallback
+            # merging needed).
+            cmd.extend(['--softin', '-i', '--json', '--ptu', '-vvv'])
+        elif self.sonde_type == 'RS92':
+            # Matches the KA9Q path / auto_rx: soft bits are inverted → -i.
+            # JSON output carries PTU directly in this mode (no text fallback
+            # merging needed).
+            cmd.extend(['--softin', '-i', '--json', '--ptu', '-v', '-vx', '--crc', '--ecc', '--vel'])
+            # RS92: rs92mod -v [-e <ephemeris>] --IQ 0.0 - 48000 16
+            # RS92 needs the current GPS-day broadcast ephemeris (RINEX) to
+            # solve a position. If the opt-in downloader has today's file
+            # (config rs92.ephemeris_download, see src/sdr/ephemeris.py) pass
+            # it with -e; otherwise decode as before (position may be absent).
+            try:
+                from ..sdr.ephemeris import rs92_today_file
+                _ephem = rs92_today_file()
+            except Exception:
+                _ephem = None
+            cmd.append('-v')
+            if _ephem:
+                cmd.extend(['-e', _ephem])
+                self.logger.info(f"RS92: using GPS ephemeris {_ephem}")
         else:
             # Type not in SOFT_CHAIN_PARAMS — shouldn't happen (constructor
             # gates decode_chain), but never crash into it.
@@ -783,13 +826,14 @@ class RS1729Decoder:
                 except Exception:
                     _ephem = None
                 cmd.append('-v')
+                cmd.extend(['--json', '--ptu', '-v', '-vx', '--crc', '--ecc', '--vel'])
                 if _ephem:
                     cmd.extend(['-e', _ephem])
                     self.logger.info(f"RS92: using GPS ephemeris {_ephem}")
                 cmd.extend(['--IQ', '0.0', '-', str(self.sample_rate), '16'])
-            elif self.sonde_type == 'iMet':
+            elif self.sonde_type in 'IMET':
                 # iMet: imet54mod -v --IQ 0.0 - 48000 16
-                cmd.extend(['-v', '--IQ', '0.0', '-', str(self.sample_rate), '16'])
+                cmd.extend(['--dc', '--lpIQ', '--iq', '0.0', '-', str(self.sample_rate), '16', '--json'])
             else:
                 # Default: assume RS41-like syntax (no --sat — it disables JSON PTU)
                 cmd.extend(['-vv', '--ptu2', '--json', '--IQ', '0.0', '-', str(self.sample_rate), '16'])
@@ -881,7 +925,15 @@ class RS1729Decoder:
         decode chains. Returns True when the decoder survives 2.5 s."""
         # Wait briefly to check startup
         time.sleep(0.5)
-        if self.process.poll() is not None:
+        process_exit = self.process.poll()
+        if process_exit is not None:
+            try:
+                process_err = self.process.stderr.read(500).decode('utf-8', errors='replace')
+            except Exception:
+                process_err = ''
+            self.logger.error(
+                f"decode process also exited (code {process_exit}): {process_err.strip()[:300]}"
+            )
             self._record_startup_failure(self.process.poll(), cmd, 'exited immediately')
             return False
 

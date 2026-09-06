@@ -1,0 +1,80 @@
+Ces instructions ont comme pré requis une installation d'une rtlsdr déjà fonctionnelle.
+
+Comme d'ordinaire, utilisez ces instructions à votre propre risque et sans garantie aucune.
+
+cf. https://github.com/projecthorus/radiosonde_auto_rx/wiki
+
+sudo apt update
+
+sudo apt install rtl-sdr
+
+https://github.com/projecthorus/radiosonde_auto_rx/wiki#42-rtl-sdr-permissions
+
+https://github.com/projecthorus/radiosonde_auto_rx/wiki#422-rtl-dvb-kernel-module-blacklisting
+
+https://github.com/projecthorus/radiosonde_auto_rx/wiki#423---check-your-rtlsdrs-are-working
+
+Pour installer le OpenWXSDR de ce fork "manuellement" :
+
+sudo apt-get install -y   git  build-essential   cmake   pkg-config   libusb-1.0-0-dev  python3-pip   python3-venv   python3-dev   sox
+
+git clone https://github.com/vg1320/OpenWXSDR.git
+
+cd openwxsdr
+
+mkdir -p decoders
+
+cd decoders
+
+git clone https://github.com/rs1729/RS.git rs1729
+
+cd rs1729
+
+cd demod/mod
+
+make -j"$(nproc)" 2>&1 | tee /tmp/rs1729_build.log
+
+cp *mod ../..
+
+cd ../..
+
+cd scan
+
+gcc -O2 dft_detect.c -lm -o dft_detect
+
+cp dft_detect ..
+
+cd ..
+
+chmod +x dft_detect
+
+cd demod/iq_svcl
+
+gcc -O2 iq_dec.c -lm -o iq_dec
+
+cp iq_dec ../..
+
+cd ../..
+
+chmod +x iq_dec
+
+cd ../..
+
+cd fsk_demod/
+
+gcc -O2 -c kiss_fft.c
+gcc -O2 -c modem_stats.c
+gcc -O2 -c kiss_fftr.c
+gcc -O2 -c fsk.c
+gcc -O2 fsk_demod.c fsk.o modem_stats.o kiss_fftr.o kiss_fft.o -lm -o fsk_demod
+
+cp fsk_demod ../decoders/rs1729
+
+cd ..
+
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+pip install "paho-mqtt>=1.6.1"
